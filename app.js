@@ -1,103 +1,238 @@
-'use strict';
-const J=window.Jalali,FA='۰۱۲۳۴۵۶۷۸۹',fa=n=>String(n).replace(/\d/g,d=>FA[d]);
-const MONTHS=['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
-const WD=['یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه','شنبه'],WDS=['ش','ی','د','س','چ','پ','ج'];
-const MSG=['امروزت رو قشنگ بساز!','قدم‌های کوچیک، نتیجه‌های بزرگ','یه کار کوچیک شروع کن، بقیه خودش میاد ✨','هر تیک، یه لبخند کوچیکه','آروم و پیوسته، قشنگ‌ترین راهه','امروز هم روز توئه 🌸'];
-const pad=n=>String(n).padStart(2,'0'),iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const parse=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
-const jOf=s=>{const[a,b,c]=s.split('-').map(Number);return J.toJalali(a,b,c)};
-const isoJ=(y,m,d)=>{const g=J.toGregorian(y,m,d);return`${g.gy}-${pad(g.gm)}-${pad(g.gd)}`};
-const longD=s=>{const j=jOf(s);return`${WD[parse(s).getDay()]} ${fa(j.jd)} ${MONTHS[j.jm-1]} ${fa(j.jy)}`};
-const shortD=s=>{const j=jOf(s);return`${fa(j.jd)} ${MONTHS[j.jm-1]} ${fa(j.jy)}`};
-const diff=(a,b)=>Math.round((parse(a)-parse(b))/864e5);
-const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return iso(d)};
-const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,9);
-const $=s=>document.querySelector(s);
-const h=(t,a={},...c)=>{const e=document.createElement(t);for(const k in a){const v=a[k];if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v!==false&&v!=null)e.setAttribute(k,v)}c.flat().forEach(x=>e.append(x&&x.nodeType?x:document.createTextNode(x==null||x===false?'':x)));return e};
-const P={plus:'M12 5v14M5 12h14',check:'M20 6 9 17l-5-5',trash:'M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14',edit:'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',img:'M3 5h18v14H3zM8.5 10.5h.01M21 15l-5-5L5 19',home:'M3 11l9-8 9 8M5 10v10h14V10',cal:'M3 5h18v16H3zM3 10h18M8 3v4M16 3v4',list:'M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01',gear:'M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0M16 4v4M8 10v4M18 16v4',next:'m9 6 6 6-6 6',prev:'m15 6-6 6 6 6',x:'M18 6 6 18M6 6l12 12',open:'M7 17 17 7M8 7h9v9'};
-const ico=p=>{const s=h('span');s.style.display='inline-flex';s.innerHTML=`<svg viewBox="0 0 24 24"><path d="${P[p]}"/></svg>`;return s};
-const URLS=new WeakMap(),urlOf=b=>{let u=URLS.get(b);if(!u){u=URL.createObjectURL(b);URLS.set(b,u)}return u};
-/* ---- IndexedDB ---- */
-const DB=(()=>{let p;const open=()=>p||(p=new Promise((res,rej)=>{const r=indexedDB.open('daily-planner',1);r.onupgradeneeded=()=>r.result.createObjectStore('notes',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
-const tx=async(m,f)=>{const db=await open();return new Promise((res,rej)=>{const t=db.transaction('notes',m),r=f(t.objectStore('notes'));t.oncomplete=()=>res(r.result);t.onerror=()=>rej(t.error)})};
-return{all:()=>tx('readonly',s=>s.getAll()),put:n=>tx('readwrite',s=>s.put(n)),del:id=>tx('readwrite',s=>s.delete(id)),clear:()=>tx('readwrite',s=>s.clear())}})();
-/* ---- state ---- */
-let notes=[],today=iso(new Date()),sel=today,tab=localStorage.getItem('tab')||'today',cal={y:jOf(today).jy,m:jOf(today).jm};
-const dayNotes=d=>notes.filter(n=>n.date===d).sort((a,b)=>a.createdAt-b.createdAt);
-const pending=()=>notes.filter(n=>!n.completed).sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.createdAt-b.createdAt);
-const toast=t=>{const e=h('div',{class:'toast'},t);document.body.append(e);setTimeout(()=>e.remove(),2200)};
-function sheet(title,...content){const ov=h('div',{class:'ov'}),close=()=>{ov.classList.remove('on');setTimeout(()=>ov.remove(),230)};
- ov.append(h('div',{class:'sheet',role:'dialog'},title&&h('h2',{},title),...content));
- ov.addEventListener('click',e=>{if(e.target===ov)close()});document.body.append(ov);requestAnimationFrame(()=>ov.classList.add('on'));return close}
-const confirmBox=(msg,ok='تأیید')=>new Promise(res=>{const c=sheet('',h('p',{style:'line-height:2;margin:0 0 6px;font-size:15px'},msg),h('div',{class:'btns'},h('button',{class:'btn dng',onclick:()=>{c();res(true)}},ok),h('button',{class:'btn',onclick:()=>{c();res(false)}},'انصراف')))});
-function lightbox(b){const ov=h('div',{class:'ov lb'},h('img',{src:urlOf(b),alt:''}));ov.onclick=()=>{ov.classList.remove('on');setTimeout(()=>ov.remove(),230)};document.body.append(ov);requestAnimationFrame(()=>ov.classList.add('on'))}
-/* ---- actions ---- */
-function stats(){const e=$('#stats');if(!e)return;const l=dayNotes(sel),d=l.filter(n=>n.completed).length;e.querySelector('[data-d]').textContent=fa(d);e.querySelector('[data-r]').textContent=fa(l.length-d)}
-async function toggle(n,el,rem){n.completed=!n.completed;n.updatedAt=Date.now();await DB.put(n);const c=el.querySelector('.chk');c.classList.remove('pop');void c.offsetWidth;c.classList.add('pop');c.setAttribute('aria-pressed',n.completed);
- el.classList.toggle('done',n.completed);stats();badge();
- if(rem&&n.completed){el.classList.add('out');setTimeout(render,280)}else if(tab==='cal')setTimeout(render,320)}
-async function remove(n){if(await confirmBox('این یادداشت برای همیشه حذف شود؟','حذف')){await DB.del(n.id);notes=notes.filter(x=>x.id!==n.id);render();toast('حذف شد')}}
-function goDay(d){sel=d;const j=jOf(d);cal={y:j.jy,m:j.jm};tab='today';localStorage.setItem('tab',tab);render();scrollTo({top:0,behavior:'smooth'})}
-function card(n,rem){const late=rem&&n.date<today,el=h('article',{class:'card note'+(n.completed?' done':'')});
- const chk=h('button',{class:'chk','aria-label':'انجام شد','aria-pressed':n.completed,onclick:()=>toggle(n,el,rem)},ico('check'));
- const meta=rem&&h('div',{class:'meta'},h('span',{class:'tag'},shortD(n.date)),late&&h('span',{class:'tag late'},`عقب‌افتاده · ${fa(diff(today,n.date))} روز پیش`));
- const th=n.images.length&&h('div',{class:'thumbs'},n.images.map(b=>h('img',{src:urlOf(b),alt:'تصویر یادداشت',loading:'lazy',onclick:()=>lightbox(b)})));
- const acts=h('div',{class:'acts'},rem&&h('button',{onclick:()=>goDay(n.date)},ico('open'),'باز کردن در روز اصلی'),h('button',{onclick:()=>editor(n)},ico('edit'),'ویرایش'),h('button',{onclick:()=>remove(n)},ico('trash'),'حذف'));
- el.append(chk,h('div',{class:'nb'},n.title&&h('h3',{},n.title),n.content&&h('p',{},n.content),meta,th,acts));return el}
-/* ---- editor ---- */
-async function shrink(f){try{const bm=await createImageBitmap(f),s=Math.min(1,1400/Math.max(bm.width,bm.height)),c=document.createElement('canvas');c.width=Math.round(bm.width*s);c.height=Math.round(bm.height*s);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(r,'image/jpeg',.85))||f}catch{return f}}
-function editor(n,date){const dr={title:n?n.title:'',content:n?n.content:'',imgs:n?[...n.images]:[]},j0=jOf(n?n.date:date||sel);
- const t=h('input',{type:'text',placeholder:'عنوان (اختیاری)',value:dr.title,maxlength:120}),c=h('textarea',{placeholder:'چی تو ذهنته؟'});c.value=dr.content;
- const sD=h('select'),sM=h('select'),sY=h('select');
- for(let i=1;i<=31;i++)sD.append(h('option',{value:i},fa(i)));MONTHS.forEach((m,i)=>sM.append(h('option',{value:i+1},m)));for(let y=j0.jy-6;y<=j0.jy+6;y++)sY.append(h('option',{value:y},fa(y)));
- sD.value=j0.jd;sM.value=j0.jm;sY.value=j0.jy;
- const pv=h('div',{class:'thumbs'}),draw=()=>{pv.replaceChildren(...dr.imgs.map((b,i)=>h('div',{class:'pv'},h('img',{src:urlOf(b),alt:''}),h('button',{type:'button','aria-label':'حذف تصویر',onclick:()=>{dr.imgs.splice(i,1);draw()}},'×'))))};draw();
- const fi=h('input',{type:'file',accept:'image/*',multiple:true,hidden:true,onchange:async()=>{for(const f of fi.files)dr.imgs.push(await shrink(f));fi.value='';draw()}});
- let busy=false;
- const close=sheet(n?'ویرایش یادداشت':'یادداشت جدید',h('label',{class:'f'},'عنوان',t),h('label',{class:'f'},'متن',c),
-  h('div',{class:'row'},h('label',{class:'f'},'روز',sD),h('label',{class:'f'},'ماه',sM),h('label',{class:'f'},'سال',sY)),
-  h('button',{class:'chip',type:'button',onclick:()=>fi.click()},ico('img'),'افزودن عکس'),fi,pv,
-  h('div',{class:'btns'},h('button',{class:'btn pri',onclick:async()=>{if(busy)return;const title=t.value.trim(),content=c.value.trim();if(!title&&!content&&!dr.imgs.length){toast('یه چیزی بنویس یا عکس اضافه کن 🌸');return}
-   busy=true;const y=+sY.value,m=+sM.value,d=Math.min(+sD.value,J.monthLength(y,m)),date=isoJ(y,m,d),now=Date.now();
-   const rec=n||{id:uid(),completed:false,createdAt:now};Object.assign(rec,{title,content,date,images:dr.imgs,updatedAt:now});await DB.put(rec);if(!n)notes.push(rec);
-   sel=date;const jj=jOf(date);cal={y:jj.jy,m:jj.jm};close();render();toast(n?'ذخیره شد':'اضافه شد ✨')}},'ذخیره'),h('button',{class:'btn',onclick:()=>close()},'انصراف')));
- setTimeout(()=>{if(!n)t.focus()},260)}
-/* ---- backup ---- */
-const toURL=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
-async function exportAll(){const out=[];for(const n of notes)out.push({...n,images:await Promise.all(n.images.map(toURL))});
- const b=new Blob([JSON.stringify({app:'daily-planner',version:1,exportedAt:new Date().toISOString(),notes:out})],{type:'application/json'}),a=h('a',{href:URL.createObjectURL(b),download:`planner-backup-${today}.json`});document.body.append(a);a.click();a.remove();toast('فایل پشتیبان دانلود شد')}
-async function importFile(f){try{const d=JSON.parse(await f.text());if(d.app!=='daily-planner'||!Array.isArray(d.notes))throw 0;
- if(!await confirmBox(`با بازیابی، همه یادداشت‌های فعلی با ${fa(d.notes.length)} یادداشت فایل پشتیبان جایگزین می‌شوند. ادامه می‌دهی؟`,'جایگزین کن'))return;
- const list=[];for(const n of d.notes)list.push({id:n.id||uid(),title:n.title||'',content:n.content||'',date:n.date,completed:!!n.completed,createdAt:n.createdAt||Date.now(),updatedAt:n.updatedAt||Date.now(),images:await Promise.all((n.images||[]).map(u=>fetch(u).then(r=>r.blob())))});
- await DB.clear();for(const n of list)await DB.put(n);notes=list;render();toast('بازیابی انجام شد ✅')}catch{toast('فایل پشتیبان معتبر نیست')}}
-function settings(){const fi=h('input',{type:'file',accept:'application/json,.json',hidden:true,onchange:()=>{if(fi.files[0])importFile(fi.files[0]);fi.value=''}});
- const close=sheet('پشتیبان‌گیری',h('p',{style:'font-size:13.5px;color:var(--mute);line-height:2;margin:0 0 12px'},'یادداشت‌ها و عکس‌ها فقط روی همین دستگاه ذخیره می‌شوند. با پاک شدن اطلاعات مرورگر ممکنه از بین بروند؛ پس گاهی نسخه پشتیبان بگیر.'),
-  h('div',{class:'btns',style:'flex-direction:column'},h('button',{class:'btn pri',onclick:exportAll},'دانلود نسخه پشتیبان'),h('button',{class:'btn',onclick:()=>{close();fi.click()}},'بازیابی از فایل'),fi))}
-/* ---- views ---- */
-function listOf(l,rem,emptyMsg){return l.length?l.map(n=>card(n,rem)):h('div',{class:'empty'},emptyMsg)}
-function viewToday(){const isT=sel===today,l=dayNotes(sel),dn=l.filter(n=>n.completed).length,doy=Math.floor(parse(sel)/864e5);
- const rel=isT?'امروز':sel===addDays(today,-1)?'دیروز':sel===addDays(today,1)?'فردا':'';
- return[h('section',{class:'card hero'},h('small',{},rel||' '),h('h2',{},WD[parse(sel).getDay()]),h('div',{class:'dt'},shortD(sel)),h('div',{class:'msg'},MSG[doy%MSG.length]),
-   h('div',{class:'stats',id:'stats'},h('span',{class:'pill'},'انجام‌شده',h('b',{'data-d':1},fa(dn))),h('span',{class:'pill'},'باقی‌مانده',h('b',{'data-r':1},fa(l.length-dn))))),
-  h('div',{class:'dnav'},h('button',{class:'chip',onclick:()=>{sel=addDays(sel,-1);render()}},ico('next'),'روز قبل'),!isT?h('button',{class:'chip',onclick:()=>{sel=today;render()}},'برو به امروز'):h('span'),h('button',{class:'chip',onclick:()=>{sel=addDays(sel,1);render()}},'روز بعد',ico('prev'))),
-  ...[].concat(listOf(l,false,'هنوز یادداشتی برای این روز نداری 🌱\nبا دکمه + شروع کن'))]}
-function viewCal(){const len=J.monthLength(cal.y,cal.m),first=isoJ(cal.y,cal.m,1),off=(parse(first).getDay()+1)%7,cnt={};
- notes.forEach(n=>{const o=cnt[n.date]||(cnt[n.date]={t:0,u:0});o.t++;if(!n.completed)o.u++});
- const g=h('div',{class:'grid'},WDS.map(w=>h('div',{class:'wd'},w)),Array.from({length:off},()=>h('span')));
- for(let d=1;d<=len;d++){const s=isoJ(cal.y,cal.m,d),o=cnt[s];g.append(h('button',{class:'day'+(s===today?' today':'')+(s===sel?' sel':''),'aria-label':longD(s),onclick:()=>{sel=s;render()}},fa(d),o&&h('i',{class:o.u?'':'ok'},fa(o.t))))}
- const mv=k=>{cal.m+=k;if(cal.m>12){cal.m=1;cal.y++}if(cal.m<1){cal.m=12;cal.y--}render()};
- return[h('section',{class:'card'},h('div',{class:'mh'},h('button',{class:'ib','aria-label':'ماه قبل',onclick:()=>mv(-1)},ico('next')),h('h2',{},`${MONTHS[cal.m-1]} ${fa(cal.y)}`),h('button',{class:'ib','aria-label':'ماه بعد',onclick:()=>mv(1)},ico('prev'))),g,
-   h('div',{class:'meta',style:'margin-top:12px;justify-content:center'},h('span',{class:'tag late'},'دارای کار انجام‌نشده'),h('span',{class:'tag',style:'background:var(--mint)'},'همه انجام شده'))),
-  h('h3',{class:'sec'},longD(sel)),...[].concat(listOf(dayNotes(sel),false,'یادداشتی برای این روز نیست'))]}
-function viewRem(){const l=pending();return[h('h3',{class:'sec'},l.length?`${fa(l.length)} کار باقی‌مانده`:'کارهای باقی‌مانده'),...[].concat(listOf(l,true,'عالی پیش رفتی! همه کارهات انجام شدن ✨'))]}
-function badge(){const n=pending().filter(x=>x.date<today).length,b=$('#nav [data-t=rem] .n');if(b){b.textContent=fa(n);b.hidden=!n}}
-function render(){const v=$('#view');v.className='view-in';const f={today:viewToday,cal:viewCal,rem:viewRem}[tab]();v.replaceChildren(...f);
- document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));badge()}
-function setTab(t){tab=t;localStorage.setItem('tab',t);render()}
-function init(){const nav=$('#nav');[['today','home','امروز'],['cal','cal','تقویم'],['rem','list','باقی‌مانده‌ها']].forEach(([t,i,l])=>nav.append(h('button',{'data-t':t,onclick:()=>setTab(t)},ico(i),l,t==='rem'&&h('span',{class:'n',hidden:true}))));
- $('#gear').append(ico('gear'));$('#fab').append(ico('plus'));$('#fab').onclick=()=>editor(null,sel);$('#gear').onclick=settings;
- document.addEventListener('visibilitychange',()=>{if(!document.hidden){const t=iso(new Date());if(t!==today){if(sel===today)sel=t;today=t;render()}}});
- DB.all().then(a=>{notes=a.map(n=>({...n,images:n.images||[]}));render()}).catch(()=>{$('#view').replaceChildren(h('div',{class:'empty'},'مرورگر شما اجازه ذخیره‌سازی محلی نمی‌دهد (حالت ناشناس؟)'))});
- navigator.storage&&navigator.storage.persist&&navigator.storage.persist();
- if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{})}
-init();
+/* Rooz Planner — offline-first local PWA */
+const $ = (s, root=document) => root.querySelector(s);
+const $$ = (s, root=document) => [...root.querySelectorAll(s)];
+const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const toFa = n => String(n).replace(/\d/g, d => PERSIAN_DIGITS[+d]);
+const pad = n => String(n).padStart(2,'0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseISO = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d,12); };
+const persianMonths = ['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'];
+const weekdays = ['شنبه','یکشنبه','دوشنبه','سه‌شنبه','چهارشنبه','پنجشنبه','جمعه'];
+const weekShort = ['ش','ی','د','س','چ','پ','ج'];
+function gregorianToJalali(gy,gm,gd){
+  const gdm=[0,31,((gy%4===0&&gy%100!==0)||gy%400===0)?29:28,31,30,31,30,31,31,30,31,30,31];
+  let gy2=gy-1600, gm2=gm-1, gd2=gd-1;
+  let gdn=365*gy2+Math.floor((gy2+3)/4)-Math.floor((gy2+99)/100)+Math.floor((gy2+399)/400);
+  for(let i=0;i<gm2;i++)gdn+=gdm[i+1]; gdn+=gd2;
+  let jdn=gdn-79, jnp=Math.floor(jdn/12053); jdn%=12053;
+  let jy=979+33*jnp+4*Math.floor(jdn/1461); jdn%=1461;
+  if(jdn>=366){jy+=Math.floor((jdn-1)/365);jdn=(jdn-1)%365;}
+  let jm,jd;
+  if(jdn<186){jm=1+Math.floor(jdn/31);jd=1+jdn%31;}
+  else{jm=7+Math.floor((jdn-186)/30);jd=1+(jdn-186)%30;}
+  return [jy,jm,jd];
+}
+function jalaliToGregorian(jy,jm,jd){
+  jy-=979; let jdn=365*jy+Math.floor(jy/33)*8+Math.floor(((jy%33)+3)/4);
+  jdn+=(jm<=6?(jm-1)*31:186+(jm-7)*30)+(jd-1)+79;
+  let gy=1600+400*Math.floor(jdn/146097); jdn%=146097;
+  let leap=true;
+  if(jdn>=36525){jdn--;gy+=100*Math.floor(jdn/36524);jdn%=36524;if(jdn>=365)jdn++;}
+  gy+=4*Math.floor(jdn/1461);jdn%=1461;
+  if(jdn>=366){leap=false;jdn--;gy+=Math.floor(jdn/365);jdn%=365;}
+  const md=[0,31,leap?29:28,31,30,31,30,31,31,30,31,30,31];let gm=1;
+  while(gm<=12&&jdn>=md[gm]){jdn-=md[gm];gm++;}
+  return new Date(gy,gm-1,jdn+1,12);
+}
+const jalali = date => gregorianToJalali(date.getFullYear(),date.getMonth()+1,date.getDate());
+const jalaliString = date => {const [y,m,d]=jalali(date);return `${toFa(d)} ${persianMonths[m-1]} ${toFa(y)}`};
+const jalaliKey = date => {const [y,m,d]=jalali(date);return `${y}/${pad(m)}/${pad(d)}`};
+const weekdayName = d => weekdays[(d.getDay()+1)%7];
+const monthKey = d => {const [y,m]=jalali(d);return `${y}/${pad(m)}`};
+const jalaliMonthFirst = (y,m) => jalaliToGregorian(y,m,1);
+const dayDiff = (a,b) => Math.round((parseISO(a)-parseISO(b))/86400000);
+
+const EVENTS = {
+  // Dates are Jalali unless marked gregorian; annual fixed-date events are kept locally.
+  '1/1': [{name:'نوروز',kind:'تعطیل',holiday:true},{name:'آغاز سال نو خورشیدی',kind:'ایرانی'}],
+  '1/2': [{name:'عید نوروز',kind:'تعطیل',holiday:true}],
+  '1/3': [{name:'عید نوروز',kind:'تعطیل',holiday:true}],
+  '1/4': [{name:'عید نوروز',kind:'تعطیل',holiday:true}],
+  '1/12': [{name:'روز جمهوری اسلامی ایران',kind:'تعطیل',holiday:true}],
+  '1/13': [{name:'روز طبیعت',kind:'تعطیل',holiday:true}],
+  '1/25': [{name:'روز بزرگداشت عطار نیشابوری',kind:'ایرانی'}],
+  '2/1': [{name:'روز بزرگداشت سعدی',kind:'ایرانی'}],
+  '2/10': [{name:'روز ملی خلیج فارس',kind:'ایرانی'}],
+  '2/25': [{name:'روز بزرگداشت فردوسی',kind:'ایرانی'}],
+  '3/14': [{name:'رحلت امام خمینی (تاریخ شمسی ثابت)',kind:'تعطیل',holiday:true}],
+  '3/15': [{name:'قیام ۱۵ خرداد',kind:'تعطیل',holiday:true}],
+  '3/20': [{name:'روز جهانی پناهندگان',kind:'جهانی'}],
+  '3/30': [{name:'روز جهانی یوگا',kind:'جهانی'}],
+  '4/7': [{name:'روز جهانی بوسه',kind:'جهانی'}],
+  '4/10': [{name:'روز جهانی جمعیت',kind:'جهانی'}],
+  '4/22': [{name:'روز جهانی مغز',kind:'جهانی'}],
+  '5/17': [{name:'روز خبرنگار',kind:'ایرانی'}],
+  '5/28': [{name:'روز جهانی عکاسی',kind:'جهانی'}],
+  '6/1': [{name:'روز بزرگداشت ابوعلی سینا و روز پزشک',kind:'ایرانی'}],
+  '6/4': [{name:'روز کارمند',kind:'ایرانی'}],
+  '6/5': [{name:'روز بزرگداشت زکریای رازی و روز داروسازی',kind:'ایرانی'}],
+  '6/13': [{name:'روز تعاون',kind:'ایرانی'}],
+  '6/27': [{name:'روز جهانی گردشگری',kind:'جهانی'}],
+  '7/1': [{name:'روز بزرگداشت حافظ',kind:'ایرانی'}],
+  '7/13': [{name:'روز نیروی انتظامی',kind:'ایرانی'}],
+  '7/20': [{name:'روز بزرگداشت مولوی',kind:'ایرانی'}],
+  '8/13': [{name:'روز دانش‌آموز',kind:'ایرانی'}],
+  '8/24': [{name:'روز کتاب و کتاب‌خوانی',kind:'ایرانی'}],
+  '9/5': [{name:'روز جهانی داوطلب',kind:'جهانی'}],
+  '9/16': [{name:'روز دانشجو',kind:'ایرانی'}],
+  '10/1': [{name:'شب یلدا',kind:'ایرانی'}],
+  '10/5': [{name:'روز ایمنی در برابر زلزله',kind:'ایرانی'}],
+  '10/13': [{name:'روز جهانی بریل',kind:'جهانی'}],
+  '10/29': [{name:'روز هوای پاک',kind:'ایرانی'}],
+  '11/10': [{name:'جشن سده',kind:'ایرانی'}],
+  '11/22': [{name:'پیروزی انقلاب اسلامی',kind:'تعطیل',holiday:true}],
+  '12/5': [{name:'روز مهندس',kind:'ایرانی'}],
+  '12/15': [{name:'روز درختکاری',kind:'ایرانی'}],
+  '12/29': [{name:'روز ملی شدن صنعت نفت ایران',kind:'تعطیل',holiday:true}],
+};
+const GREGORIAN_EVENTS = [
+  {m:1,d:1,name:'آغاز سال میلادی',kind:'جهانی',holiday:false},
+  {m:2,d:14,name:'روز عشق (ولنتاین)',kind:'جهانی',holiday:false},
+  {m:3,d:8,name:'روز جهانی زن',kind:'جهانی',holiday:false},
+  {m:3,d:20,name:'روز جهانی شادی',kind:'جهانی',holiday:false},
+  {m:3,d:21,name:'روز جهانی نوروز',kind:'جهانی',holiday:false},
+  {m:4,d:7,name:'روز جهانی بهداشت',kind:'جهانی',holiday:false},
+  {m:4,d:22,name:'روز زمین',kind:'جهانی',holiday:false},
+  {m:5,d:1,name:'روز جهانی کارگر',kind:'جهانی',holiday:false},
+  {m:5,d:3,name:'روز جهانی آزادی مطبوعات',kind:'جهانی',holiday:false},
+  {m:6,d:5,name:'روز جهانی محیط زیست',kind:'جهانی',holiday:false},
+  {m:6,d:21,name:'روز جهانی یوگا',kind:'جهانی',holiday:false},
+  {m:7,d:30,name:'روز جهانی دوستی',kind:'جهانی',holiday:false},
+  {m:8,d:12,name:'روز جهانی جوانان',kind:'جهانی',holiday:false},
+  {m:9,d:21,name:'روز جهانی صلح',kind:'جهانی',holiday:false},
+  {m:10,d:5,name:'روز جهانی معلم',kind:'جهانی',holiday:false},
+  {m:10,d:10,name:'روز جهانی سلامت روان',kind:'جهانی',holiday:false},
+  {m:10,d:16,name:'روز جهانی غذا',kind:'جهانی',holiday:false},
+  {m:11,d:13,name:'روز جهانی مهربانی',kind:'جهانی',holiday:false},
+  {m:12,d:3,name:'روز جهانی افراد دارای معلولیت',kind:'جهانی',holiday:false},
+  {m:12,d:10,name:'روز جهانی حقوق بشر',kind:'جهانی',holiday:false},
+  {m:12,d:25,name:'کریسمس',kind:'جهانی',holiday:false}
+];
+function eventsFor(date){
+  const [jy,jm,jd]=jalali(date);const arr=[...(EVENTS[`${jm}/${jd}`]||[])];
+  GREGORIAN_EVENTS.filter(e=>e.m===date.getMonth()+1&&e.d===date.getDate()).forEach(e=>arr.push({...e}));
+  // Date-dependent lunar holidays are intentionally not guessed; authoritative annual data should be supplied for them.
+  return arr;
+}
+
+const DB_NAME='rooz-planner-db', DB_VERSION=1, STORE='notes';
+let db;
+function openDB(){return new Promise((resolve,reject)=>{
+  if(!('indexedDB' in window)){reject(new Error('IndexedDB در دسترس نیست'));return;}
+  const req=indexedDB.open(DB_NAME,DB_VERSION);
+  req.onupgradeneeded=()=>{const d=req.result;if(!d.objectStoreNames.contains(STORE)){const s=d.createObjectStore(STORE,{keyPath:'id'});s.createIndex('date','date',{unique:false});s.createIndex('completed','completed',{unique:false});}};
+  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+});}
+function txStore(mode='readonly'){return db.transaction(STORE,mode).objectStore(STORE)}
+function allNotes(){return new Promise((resolve,reject)=>{const r=txStore().getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error)})}
+function putNote(note){return new Promise((resolve,reject)=>{const r=txStore('readwrite').put(note);r.onsuccess=()=>resolve(note);r.onerror=()=>reject(r.error)})}
+function deleteNote(id){return new Promise((resolve,reject)=>{const r=txStore('readwrite').delete(id);r.onsuccess=resolve;r.onerror=()=>reject(r.error)})}
+let notes=[], selectedDate=new Date(), calendarCursor=new Date(), editingId=null, pendingImages=[], toastTimer;
+selectedDate.setHours(12,0,0,0);calendarCursor=new Date(selectedDate);
+const todayKey=()=>iso(new Date());
+function dateFromJalaliKey(key){const [y,m,d]=key.split('/').map(Number);return jalaliToGregorian(y,m,d)}
+function localDateFromInput(s){if(!s)return new Date();return parseISO(s)}
+function showToast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2300)}
+function getByDate(date){const k=iso(date);return notes.filter(n=>n.date===k).sort((a,b)=>a.createdAt-b.createdAt)}
+function escapeHTML(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function fmtShort(key){return jalaliString(parseISO(key))}
+function renderHeader(){
+ const now=new Date();$('#fullDate').textContent=`${weekdayName(now)}، ${jalaliString(now)}`;
+ const same=iso(selectedDate)===todayKey();$('#selectedDayLabel').textContent=same?'برنامه‌های امروز':'برنامه‌های این روز';
+ $('#selectedDateTitle').textContent=same?'امروز':`${weekdayName(selectedDate)}، ${jalaliString(selectedDate)}`;
+ const dayNotes=getByDate(selectedDate),done=dayNotes.filter(n=>n.completed).length,todo=dayNotes.length-done;
+ $('#doneCount').textContent=toFa(done);$('#todoCount').textContent=toFa(todo);
+ const pct=dayNotes.length?Math.round(done/dayNotes.length*100):0;$('#progressBar').style.width=pct+'%';$('#progressLabel').textContent=toFa(pct)+'٪ تکمیل شده';
+ const remaining=notes.filter(n=>!n.completed).length;$('#remainingBadge').hidden=!remaining;$('#floatingAdd').style.display=$('.nav-item.active')?.dataset.view==='todayView'?'grid':'none';
+}
+function noteCard(n,compact=false){
+ const done=n.completed?' completed':'';
+ const title=n.title?`<h3 class="note-title">${escapeHTML(n.title)}</h3>`:'';
+ const content=n.content?`<p class="note-content">${escapeHTML(n.content)}</p>`:'';
+ const imgs=(n.images||[]).length?`<div class="note-images">${n.images.map((src,i)=>`<img src="${src}" alt="تصویر یادداشت" data-photo="${n.id}" data-image="${i}" loading="lazy">`).join('')}</div>`:'';
+ const datePill=compact?`<span class="date-pill">${escapeHTML(fmtShort(n.date))}</span>`:'';
+ return `<article class="note-card${done}" data-note="${n.id}"><input class="note-check" type="checkbox" aria-label="علامت‌گذاری انجام‌شدن" ${n.completed?'checked':''} data-check="${n.id}"><div class="note-body">${title}${content}${imgs}<div class="note-meta">${datePill}<span>${n.completed?'✓ انجام شد':'یادداشت شخصی'}</span></div></div><div class="note-actions"><button class="mini-action" data-edit="${n.id}" aria-label="ویرایش یادداشت" title="ویرایش">✎</button><button class="mini-action" data-delete="${n.id}" aria-label="حذف یادداشت" title="حذف">⌫</button></div></article>`;
+}
+function renderNotes(){
+ const day=getByDate(selectedDate);$('#notesList').innerHTML=day.map(n=>noteCard(n)).join('');$('#emptyNotes').hidden=day.length>0;
+ const rem=notes.filter(n=>!n.completed).sort((a,b)=>a.date.localeCompare(b.date)||a.createdAt-b.createdAt);
+ $('#remainingList').innerHTML=rem.map(n=>noteCard(n,true)).join('');$('#emptyRemaining').hidden=rem.length>0;
+ const calNotes=getByDate(selectedDate);$('#calendarNotesList').innerHTML=calNotes.map(n=>noteCard(n,true)).join('');$('#calendarNotesTitle').textContent=`یادداشت‌های ${jalaliString(selectedDate)}`;
+ renderHeader();renderCalendar();
+}
+function renderCalendar(){
+ const [jy,jm]=jalali(calendarCursor);$('#monthTitle').textContent=`${persianMonths[jm-1]} ${toFa(jy)}`;
+ $('#weekdayLabels').innerHTML=weekShort.map(x=>`<span>${x}</span>`).join('');
+ const first=jalaliMonthFirst(jy,jm);let offset=(first.getDay()+1)%7; // Saturday first
+ const gridStart=new Date(first);gridStart.setDate(first.getDate()-offset);
+ let html='';
+ for(let i=0;i<42;i++){
+   const d=new Date(gridStart);d.setDate(gridStart.getDate()+i);
+   const key=iso(d),jd=jalali(d),sameMonth=jd[0]===jy&&jd[1]===jm,ev=eventsFor(d),hasNote=notes.some(n=>n.date===key),hasEvent=ev.length>0,isHoliday=ev.some(e=>e.holiday);
+   const cls=['calendar-day',!sameMonth?'outside':'',key===todayKey()?'today':'',key===iso(selectedDate)?'selected':'',isHoliday?'holiday':''].filter(Boolean).join(' ');
+   html+=`<button class="${cls}" data-day="${key}" aria-label="${escapeHTML(jalaliString(d))}"><span class="day-number">${toFa(jd[2])}</span><span class="day-markers">${hasNote?'<i></i>':''}${hasEvent?'<i class="event-marker"></i>':''}</span></button>`;
+ }
+ $('#calendarGrid').innerHTML=html;
+ const ev=eventsFor(selectedDate);$('#eventsDateTitle').textContent=jalaliString(selectedDate);
+ $('#eventsList').innerHTML=ev.length?ev.map(e=>`<div class="event-row ${e.holiday?'holiday-event':''}">${escapeHTML(e.name)} <span class="event-kind">${e.holiday?'تعطیل رسمی':escapeHTML(e.kind||'مناسبت')}</span></div>`).join(''):'<p class="no-events">برای این روز مناسبتی در فهرست محلی ثبت نشده است.</p>';
+}
+function setView(id){
+ $$('.view').forEach(v=>v.classList.toggle('active',v.id===id));
+ $$('.nav-item').forEach((b,i)=>b.classList.toggle('active',b.dataset.view===id));
+ const idx=['todayView','calendarView','remainingView'].indexOf(id);$('#navIndicator').className='nav-indicator'+(idx?` pos-${idx}`:'');
+ $('#floatingAdd').style.display=id==='todayView'?'grid':'none';
+ if(id==='calendarView')renderCalendar();
+}
+function openDialog(note=null,defaultDate=selectedDate){
+ editingId=note?.id||null;pendingImages=(note?.images||[]).slice();
+ $('#dialogTitle').textContent=note?'ویرایش یادداشت':'یادداشت جدید';
+ $('#noteTitle').value=note?.title||'';$('#noteContent').value=note?.content||'';
+ $('#noteDate').value=note?.date||iso(defaultDate);$('#noteImages').value='';
+ $('#storageMessage').textContent='اطلاعات روی همین دستگاه ذخیره می‌شود.';
+ renderPreviews();$('#noteDialog').showModal();setTimeout(()=>$('#noteContent').focus(),80);
+}
+function renderPreviews(){
+ $('#imagePreviews').innerHTML=pendingImages.map((src,i)=>`<div class="preview-wrap"><img src="${src}" alt="پیش‌نمایش تصویر"><button type="button" class="remove-preview" data-remove-image="${i}" aria-label="حذف تصویر">×</button></div>`).join('');
+}
+function fileToDataURL(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)})}
+function compressImage(file,max=1400,quality=.82){return new Promise((resolve,reject)=>{const fr=new FileReader();fr.onerror=reject;fr.onload=()=>{const img=new Image();img.onerror=()=>resolve(fr.result);img.onload=()=>{const scale=Math.min(1,max/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.round(img.width*scale);canvas.height=Math.round(img.height*scale);canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',quality))};img.src=fr.result};fr.readAsDataURL(file)})}
+async function saveNote(ev){
+ ev.preventDefault();const content=$('#noteContent').value.trim();if(!content){$('#noteContent').focus();return}
+ const date=$('#noteDate').value;if(!date)return;
+ const old=notes.find(n=>n.id===editingId);const note={id:editingId||crypto.randomUUID(),title:$('#noteTitle').value.trim(),content,date,completed:old?.completed||false,createdAt:old?.createdAt||Date.now(),updatedAt:Date.now(),images:pendingImages};
+ try{await putNote(note);notes=await allNotes();$('#noteDialog').close();selectedDate=parseISO(date);calendarCursor=new Date(selectedDate);renderNotes();showToast(old?'یادداشت ویرایش شد':'یادداشت ذخیره شد ✨')}
+ catch(e){$('#storageMessage').textContent='ذخیره‌سازی انجام نشد؛ فضای دستگاه را بررسی کن.';console.error(e)}
+}
+async function toggleNote(id,completed){const n=notes.find(x=>x.id===id);if(!n)return;n.completed=completed;n.updatedAt=Date.now();try{await putNote(n);notes=await allNotes();renderNotes()}catch(e){showToast('ذخیره وضعیت انجام نشد')}}
+async function removeNote(id){if(!confirm('این یادداشت حذف شود؟'))return;await deleteNote(id);notes=await allNotes();renderNotes();showToast('یادداشت حذف شد')}
+function openPhoto(src){const wrap=document.createElement('div');wrap.className='photo-overlay';wrap.innerHTML='<button aria-label="بستن">×</button><img alt="تصویر یادداشت">';$('img',wrap).src=src;wrap.addEventListener('click',()=>wrap.remove());document.body.append(wrap)}
+function applyTheme(theme){document.documentElement.dataset.theme=theme;$('#themeIcon').textContent=theme==='dark'?'☀':'☾';$('#themeToggle').setAttribute('aria-label',theme==='dark'?'فعال کردن حالت روشن':'فعال کردن حالت تاریک');try{localStorage.setItem('rooz-theme',theme)}catch{}}
+function initTheme(){let theme;try{theme=localStorage.getItem('rooz-theme')}catch{}if(!theme)theme=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';applyTheme(theme)}
+function exportBackup(){/* intentionally kept minimal; no extra UI */}
+
+// Events
+$('#themeToggle').addEventListener('click',()=>applyTheme(document.documentElement.dataset.theme==='dark'?'light':'dark'));
+$('#addNoteBtn').addEventListener('click',()=>openDialog(null,selectedDate));$('#emptyAddBtn').addEventListener('click',()=>openDialog(null,selectedDate));$('#floatingAdd').addEventListener('click',()=>openDialog(null,selectedDate));$('#calendarAddBtn').addEventListener('click',()=>openDialog(null,selectedDate));
+$('#closeDialog').addEventListener('click',()=>$('#noteDialog').close());$('#cancelDialog').addEventListener('click',()=>$('#noteDialog').close());$('#noteForm').addEventListener('submit',saveNote);
+$('#noteImages').addEventListener('change',async e=>{const files=[...e.target.files].slice(0,6-pendingImages.length);for(const f of files){if(!f.type.startsWith('image/'))continue;try{pendingImages.push(await compressImage(f))}catch{showToast('خواندن تصویر ممکن نشد')}}renderPreviews();e.target.value=''});
+$('#imagePreviews').addEventListener('click',e=>{const b=e.target.closest('[data-remove-image]');if(b){pendingImages.splice(+b.dataset.removeImage,1);renderPreviews()}});
+document.addEventListener('click',async e=>{
+ const check=e.target.closest('[data-check]');if(check){await toggleNote(check.dataset.check,check.checked);return}
+ const edit=e.target.closest('[data-edit]');if(edit){const n=notes.find(x=>x.id===edit.dataset.edit);if(n)openDialog(n);return}
+ const del=e.target.closest('[data-delete]');if(del){await removeNote(del.dataset.delete);return}
+ const photo=e.target.closest('[data-photo]');if(photo){const n=notes.find(x=>x.id===photo.dataset.photo);if(n)openPhoto(n.images[+photo.dataset.image]);return}
+ const day=e.target.closest('[data-day]');if(day){selectedDate=parseISO(day.dataset.day);renderNotes();$('#calendarNotesTitle').textContent=`یادداشت‌های ${jalaliString(selectedDate)}`}
+});
+$('#prevDay').addEventListener('click',()=>{selectedDate.setDate(selectedDate.getDate()-1);renderNotes()});$('#nextDay').addEventListener('click',()=>{selectedDate.setDate(selectedDate.getDate()+1);renderNotes()});$('#todayBtn').addEventListener('click',()=>{selectedDate=new Date();selectedDate.setHours(12,0,0,0);calendarCursor=new Date(selectedDate);renderNotes()});
+$('#prevMonth').addEventListener('click',()=>{const [y,m]=jalali(calendarCursor);calendarCursor=jalaliToGregorian(m===1?y-1:y,m===1?12:m-1,1);renderCalendar()});$('#nextMonth').addEventListener('click',()=>{const [y,m]=jalali(calendarCursor);calendarCursor=jalaliToGregorian(m===12?y+1:y,m===12?1:m+1,1);renderCalendar()});
+$$('.nav-item').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+$('#noteDialog').addEventListener('click',e=>{if(e.target===$('#noteDialog'))$('#noteDialog').close()});
+document.addEventListener('contextmenu',e=>{if(e.target.closest('.note-title,.note-content,.note-images'))e.preventDefault()});
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'&&e.target.closest('.note-title,.note-content'))e.preventDefault()});
+
+(async function init(){
+ initTheme();
+ try{db=await openDB();notes=await allNotes()}catch(e){console.error(e);showToast('ذخیره‌سازی محلی در این مرورگر در دسترس نیست')}
+ renderHeader();renderNotes();
+ if('serviceWorker' in navigator && location.protocol!=='file:'){navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW registration failed',e))}
+})();

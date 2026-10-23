@@ -1,10 +1,92 @@
 <!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#efe6ff"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png">
-<title>برنامه‌ریز روزانه</title><link rel="stylesheet" href="style.css"></head>
-<body><div class="bg"></div>
-<header class="bar"><h1>دفترچه روزانه ✨</h1><button id="gear" class="ib" aria-label="تنظیمات و پشتیبان"></button></header>
-<main id="view"></main><button id="fab" class="fab" aria-label="یادداشت جدید"></button><nav id="nav"></nav>
-<script src="jalali.js"></script><script src="app.js"></script></body></html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f7f4ff">
+  <meta name="description" content="دفتر برنامه‌ریزی روزانه؛ ساده، مینیمال و آفلاین">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <title>روژ | برنامه‌ریز روزانه</title>
+</head>
+<body>
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="روژ، صفحه اصلی"><span class="brand-mark">ر</span><span>روژ<small>دفتر روزهای تو</small></span></a>
+      <button class="theme-toggle icon-button" id="themeToggle" aria-label="تغییر حالت روشن و تاریک" title="حالت روشن / تاریک"><span id="themeIcon">☾</span></button>
+    </header>
+
+    <section class="hero glass">
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="live-dot"></span> یک شروع تازه</div>
+        <h1 id="greeting">امروزت رو قشنگ بساز!</h1>
+        <p id="fullDate" class="date-line">در حال بارگذاری تاریخ…</p>
+      </div>
+      <div class="hero-orb" aria-hidden="true"><span>✦</span><i></i><b></b></div>
+      <div class="daily-stats">
+        <div><span class="stat-number" id="doneCount">۰</span><span>انجام‌شده</span></div>
+        <div class="stat-divider"></div>
+        <div><span class="stat-number" id="todoCount">۰</span><span>باقی‌مانده</span></div>
+        <div class="progress-wrap"><div class="progress-track"><span id="progressBar"></span></div><small id="progressLabel">۰٪ تکمیل شده</small></div>
+      </div>
+    </section>
+
+    <section class="day-heading">
+      <div><span class="section-kicker" id="selectedDayLabel">برنامه‌های امروز</span><h2 id="selectedDateTitle">امروز</h2></div>
+      <div class="day-arrows"><button id="prevDay" class="icon-button" aria-label="روز قبل">‹</button><button id="todayBtn" class="today-button">امروز</button><button id="nextDay" class="icon-button" aria-label="روز بعد">›</button></div>
+    </section>
+
+    <section id="todayView" class="view active">
+      <div class="quick-add glass">
+        <span class="add-spark">✧</span><div class="quick-add-copy"><strong>چیزی توی ذهنت هست؟</strong><small>یادداشتت رو همین‌جا ثبت کن.</small></div>
+        <button id="addNoteBtn" class="primary-button"><span>＋</span> یادداشت جدید</button>
+      </div>
+      <div id="notesList" class="notes-list"></div>
+      <div id="emptyNotes" class="empty-state glass"><div class="empty-illustration">✿</div><h3>صفحه‌ات آماده‌ی شروعه</h3><p>اولین یادداشت امروزت رو اضافه کن و قدم کوچیکی بردار.</p><button class="text-button" id="emptyAddBtn">＋ افزودن یادداشت</button></div>
+    </section>
+
+    <section id="calendarView" class="view">
+      <div class="calendar-card glass">
+        <div class="calendar-head"><div><span class="section-kicker">نگاهی به روزها</span><h2 id="monthTitle">مهر ۱۴۰۵</h2></div><div class="day-arrows"><button id="prevMonth" class="icon-button" aria-label="ماه قبل">‹</button><button id="nextMonth" class="icon-button" aria-label="ماه بعد">›</button></div></div>
+        <div class="weekday-grid" id="weekdayLabels"></div>
+        <div class="calendar-grid" id="calendarGrid"></div>
+        <div class="calendar-legend"><span><i class="legend-dot today-dot"></i> امروز</span><span><i class="legend-dot note-dot"></i> یادداشت</span><span><i class="legend-dot event-dot"></i> مناسبت / تعطیل</span></div>
+      </div>
+      <div class="event-card glass"><div class="event-heading"><span class="event-icon">✦</span><div><span class="section-kicker">در این روز</span><h3 id="eventsDateTitle">مناسبت‌های روز</h3></div></div><div id="eventsList" class="events-list"></div></div>
+      <div class="calendar-day-notes"><div class="subsection-head"><h3 id="calendarNotesTitle">یادداشت‌های این روز</h3><button id="calendarAddBtn" class="text-button">＋ افزودن</button></div><div id="calendarNotesList" class="notes-list compact-list"></div></div>
+    </section>
+
+    <section id="remainingView" class="view">
+      <div class="remaining-intro glass"><div class="remaining-icon">☁</div><div><span class="section-kicker">قدم‌به‌قدم جلو برو</span><h2>کارهای باقی‌مانده</h2><p>هر چیزی که هنوز تیک نخورده، اینجاست.</p></div></div>
+      <div id="remainingList" class="notes-list"></div>
+      <div id="emptyRemaining" class="empty-state glass"><div class="empty-illustration">✧</div><h3>عالی پیش رفتی!</h3><p>همه‌ی کارهات انجام شدن. کمی به خودت افتخار کن.</p></div>
+    </section>
+
+    <nav class="bottom-nav glass" aria-label="ناوبری اصلی">
+      <span class="nav-indicator" id="navIndicator"></span>
+      <button class="nav-item active" data-view="todayView"><span class="nav-icon">⌂</span><span>امروز</span></button>
+      <button class="nav-item" data-view="calendarView"><span class="nav-icon">▦</span><span>تقویم</span></button>
+      <button class="nav-item" data-view="remainingView"><span class="nav-icon">☷</span><span>باقی‌مانده‌ها</span><span class="nav-badge" id="remainingBadge" hidden></span></button>
+    </nav>
+  </main>
+
+  <button id="floatingAdd" class="floating-add" aria-label="افزودن یادداشت">＋</button>
+
+  <dialog id="noteDialog" class="note-dialog">
+    <form id="noteForm" class="dialog-card">
+      <div class="dialog-head"><div><span class="section-kicker">ذهن‌ات رو سبک کن</span><h2 id="dialogTitle">یادداشت جدید</h2></div><button type="button" id="closeDialog" class="icon-button" aria-label="بستن">×</button></div>
+      <label class="field-label" for="noteTitle">عنوان <span>اختیاری</span></label><input id="noteTitle" class="text-input" maxlength="100" placeholder="مثلاً خرید هفتگی">
+      <label class="field-label" for="noteContent">یادداشت</label><textarea id="noteContent" class="text-input" rows="4" placeholder="هر چیزی که می‌خواهی یادت بماند…" required></textarea>
+      <label class="field-label" for="noteDate">برای چه روزی؟</label><input id="noteDate" class="text-input date-input" type="date" required>
+      <label class="upload-area" for="noteImages"><span class="upload-icon">＋</span><span><strong>افزودن عکس</strong><small>می‌توانی چند تصویر انتخاب کنی</small></span><input id="noteImages" type="file" accept="image/*" multiple hidden></label>
+      <div id="imagePreviews" class="image-previews"></div>
+      <div class="dialog-actions"><button type="button" id="cancelDialog" class="secondary-button">انصراف</button><button type="submit" class="primary-button">ذخیره یادداشت</button></div>
+      <p id="storageMessage" class="storage-message" role="status"></p>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
